@@ -94,3 +94,38 @@ struct ctx_s* get_last_ctx() {
   }
   return last_ctx;
 }
+
+void sem_init(struct sem_s *sem, unsigned int val) {
+  sem->count = val;
+  sem->ctx_locked = NULL;
+}
+
+void sem_down(struct sem_s *sem) {
+  sem->count--;
+  if(sem->count < 0) {
+    current_ctx->state = CTX_LOCKED;
+    get_last_ctx()->next = current_ctx->next;
+    current_ctx->next = sem->ctx_locked;
+    sem->ctx_locked = current_ctx;
+    yield();
+  }
+}
+
+void sem_up(struct sem_s *sem) {
+  sem->count++;
+  if (sem->count <= 0) {
+    struct ctx_s *tmp;
+    struct ctx_s *insert;
+    tmp = sem->ctx_locked;
+    while(tmp->next != NULL) {
+      tmp = tmp->next;
+    }
+    insert = current_ctx->next;
+    while(insert->next != current_ctx) {
+      insert = insert->next;
+    }
+    insert->next = tmp;
+    tmp->next = current_ctx;
+    tmp->state = CTX_ACTIVATED;
+  }
+}
