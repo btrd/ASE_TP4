@@ -19,6 +19,7 @@ struct ctx_s {
   enum ctx_state_e state;
   unsigned int ctx_magic;
   struct ctx_s* next;
+  struct ctx_s* next_locked;
   #define MAGIC 0xDEADBEEF 
 };
 

@@ -21,6 +21,7 @@ int init_ctx(struct ctx_s* ctx, int stack_size, funct_t* f, void* args) {
   ctx->args = args;
   ctx->state = CTX_READY;
   ctx->ctx_magic = MAGIC;
+  ctx->next_locked = NULL;
   return 1;
 }
 
@@ -101,31 +102,39 @@ void sem_init(struct sem_s *sem, unsigned int val) {
 }
 
 void sem_down(struct sem_s *sem) {
+  irq_disable();
   sem->count--;
   if(sem->count < 0) {
     current_ctx->state = CTX_LOCKED;
+
+    /* Delete current_ctx */
     get_last_ctx()->next = current_ctx->next;
-    current_ctx->next = sem->ctx_locked;
+
+    if (sem->ctx_locked != NULL)
+      current_ctx->next_locked = sem->ctx_locked;
+
     sem->ctx_locked = current_ctx;
     yield();
   }
+  irq_enable();
 }
 
 void sem_up(struct sem_s *sem) {
+  irq_disable();
   sem->count++;
   if (sem->count <= 0) {
-    struct ctx_s *tmp;
-    struct ctx_s *insert;
-    tmp = sem->ctx_locked;
-    while(tmp->next != NULL) {
-      tmp = tmp->next;
+    struct ctx_s * tmp = sem->ctx_locked;
+
+    if (tmp->next_locked == NULL) {
+      sem->ctx_locked = NULL;
+    } else {
+      sem->ctx_locked = tmp->next_locked;
     }
-    insert = current_ctx->next;
-    while(insert->next != current_ctx) {
-      insert = insert->next;
-    }
-    insert->next = tmp;
-    tmp->next = current_ctx;
+
+    tmp->next = current_ctx->next;
+    current_ctx->next = tmp;
+
     tmp->state = CTX_ACTIVATED;
   }
+  irq_enable();
 }
